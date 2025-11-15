@@ -1,4 +1,4 @@
-name: "Universal 3OS Build + ProofLedger"
+name: "Universal Stable 3OS Build + ProofLedger"
 
 on:
   push:
@@ -9,51 +9,53 @@ on:
 permissions:
   contents: write
 
+# ---------------------------------------------------------
+# 🔥 NEVER CANCEL. NEVER AUTO-STOP. FULL STABILITY MODE.
+# ---------------------------------------------------------
 concurrency:
-  group: universal-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
     name: "Build — ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30   # Extra protection
     strategy:
+      fail-fast: false    # OS 하나 실패해도 나머지 계속
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
-      # --------------------------------------
+      # ---------------------------------------------------
       # CHECKOUT
-      # --------------------------------------
+      # ---------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # --------------------------------------
-      # CREATE DIST
-      # --------------------------------------
+      # ---------------------------------------------------
+      # DIST FOLDER (NEVER FAIL)
+      # ---------------------------------------------------
       - name: Prepare dist
+        shell: bash
         run: mkdir -p dist
 
-      # --------------------------------------
-      # BUILD (AUTO MODE)
-      # 너가 각 리포에 쓰는 언어별 빌드를 직접 채워 넣기
-      # --------------------------------------
-      - name: Build Project (Auto placeholder)
+      # ---------------------------------------------------
+      # BUILD SECTION (YOU CAN CUSTOMIZE PER REPO)
+      # ---------------------------------------------------
+      - name: Build (Universal Placeholder)
         shell: bash
         run: |
-          echo "Running default build step..."
-          # Example:
+          echo "Running universal build step..."
+          # Example: replace for each repo
           # g++ src/main.cpp -o dist/out
           # ghc src/Main.hs -o dist/out
           # dotnet publish -c Release -o dist
-          # Or simply copy source:
           cp -r src dist/
 
-      # --------------------------------------
-      # PROOFLEDGER (WINDOWS + UNIX 둘 다 되는 완전판)
-      # --------------------------------------
+      # ---------------------------------------------------
+      # PROOFLEDGER — Windows + Unix 100% stable
+      # ---------------------------------------------------
       - name: Generate ProofLedger
         shell: bash
         run: |
@@ -62,9 +64,8 @@ jobs:
           echo "Branch: $GITHUB_REF_NAME" >> proofledger-${{ matrix.os }}.txt
           echo "OS: ${{ matrix.os }}" >> proofledger-${{ matrix.os }}.txt
           echo "Build Time: $(date)" >> proofledger-${{ matrix.os }}.txt
-          echo "-------------------------------------------" >> proofledger-${{ matrix.os }}.txt
+          echo "------------------------------------" >> proofledger-${{ matrix.os }}.txt
 
-          # Windows 전용 SHA256
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             for file in dist/*; do
               certutil -hashfile "$file" SHA256 >> proofledger-${{ matrix.os }}.txt
@@ -73,9 +74,9 @@ jobs:
             sha256sum dist/* >> proofledger-${{ matrix.os }}.txt
           fi
 
-      # --------------------------------------
-      # UPLOAD ARTIFACT
-      # --------------------------------------
+      # ---------------------------------------------------
+      # ARTIFACTS
+      # ---------------------------------------------------
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -84,13 +85,15 @@ jobs:
             dist/**
             proofledger-${{ matrix.os }}.txt
 
-  # --------------------------------------
-  # MERGE BUNDLE (자동 통합)
-  # --------------------------------------
+
+  # ---------------------------------------------------------
+  # MERGE — Always Runs After Build (Never Cancels)
+  # ---------------------------------------------------------
   merge:
-    name: "Merge All OS Artifacts"
+    name: "Merge Release Bundle"
     needs: [build]
     runs-on: ubuntu-latest
+    if: always()
 
     steps:
       - name: Checkout
@@ -101,7 +104,7 @@ jobs:
         with:
           path: merged
 
-      - name: Create Final Release Zip
+      - name: Create Bundle Zip
         run: |
           cd merged
           zip -r universal-allos.zip .
